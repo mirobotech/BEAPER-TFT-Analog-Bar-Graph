@@ -1,9 +1,11 @@
 /*
  Project: BEAPER Analog Bar Graph     Activity: mirobo.tech/beaper
- Date:    May 24, 2024
+ Date:    May 30, 2024
  
- BEAPER Nano sample program demonstrating reading analog inputs and
- displaying outpu values using bar graphs on the TFT LCD display.
+ BEAPER Nano example program demonstrating analog input from the on-board
+ ambient light sensor, temperature sensor, and two potentiometers. Analog
+ values are displayed using bar graphs and numeric readouts on the TFT LCD
+ display as well as using PWM to drive LEDs D2-D5. 
  This program is a work in progress and is likely to change.
 */
 
@@ -35,23 +37,25 @@ const int LED5 = 7;
 
 const int BEEPER = 8;         // Piezo beeper LS1
 
-// Define BEAPER Analog input devices
-const int ANLS = A0;          // Ambient light sensor Q4
-const int ANQ4 = A0;
-const int ANQ1 = A0;          // Left floor sensor module phototransistor
-const int ANFL = A0;          // ANFL = AN(alog) F(loor) L(eft)
-const int ANTS = A1;          // Temperature sensor U4
-const int ANU4 = A1;
-const int ANQ2 = A1;          // Right floor sensor module left line phototransistor
-const int ANLL  = A1;         // ANLL = AN(alog) L(ine) L(eft)
-const int ANPOT_L = A2;       // Left potentiometer RV1
-const int ANRV1 = A2;
-const int ANQ3 = A3;          // Right floor sensor module right line/floor phototransistor
-const int ANFR = A3;          // ANFR = AN(alog) F(loor) R(ight)
-const int ANLR = A3;          // ANLR = AN(alog) L(ine) R(ight)
-const int ANPOT_R = A3;       // Right potentiometer RV2
-const int ANRV2 = A3;
-const int ANVDIV = A3;        // Battery voltage divider 
+// Define BEAPER Analog input devices. Each device is defined by both a mnemonic and its
+// part reference: e.g. ANLS = ANQ4. Use JP1-JP4 to secect between analog input devices.
+const int ANLS = A0;          // ANLS = AN(alog) ambient L(ight) S(ensor) - Q4
+const int ANQ4 = A0;          // Analog phototransistor Q4 (same as above)
+const int ANFL = A0;          // ANFL = AN(alog) F(loor) sensor L(eft) - Q1
+const int ANQ1 = A0;          // Left floor sensor phototransistor Q1
+const int ANTS = A1;          // ANTS = AN(alog) T(emperature) S(ensor) - U4
+const int ANU4 = A1;          // Analog temperature sensor U4
+const int ANLL  = A1;         // ANLL = AN(alog) L(ine) L(eft) - Q2
+const int ANQ2 = A1;          // Right sensor module left line sensor phototransistor Q2
+const int ANPOTL = A2;        // ANPOTL = AN(alaog) POT(entiometer) L(eft) - RV1
+const int ANRV1 = A2;         // Analog potentiometer RV1
+const int ANFR = A3;          // ANFR = AN(alog) F(loor) sensor R(ight) - Q3
+const int ANLR = A3;          // ANLR = AN(alog) L(ine) sensor R(ight) - Q3
+const int ANQ3 = A3;          // Right sensor module right line/floor phototransistor Q3
+const int ANPOTR = A3;        // ANPOTR = AN(alog) POT(entiometer) R(ight) - RV2
+const int ANRV2 = A3;         // Analog potetniometer RV2
+const int ANVDIV = A3;        // ANVDIV = AN(alog) battery V(oltage) DIV(ider) - R25 & R26
+const int ANVBATT = A3;       // ANVBATT = AN(alog) V(oltage), BATT(ery) - from R25 & R26
 
 // Pre-defined Arduino Nano ESP32 LEDS (listed here only for name reference)
 // LED_BUILTIN (D13)          // Yellow LED
@@ -118,7 +122,7 @@ void setup(void) {
   canvas.print("   BEAPER Nano");
   // Display the canvas on the LCD
   lcd.drawRGBBitmap(0, 0, canvas.getBuffer(), canvas.width(), canvas.height());
-  // Wait a bit while displaying logo and to allow Serial to start
+  // Delay to display the logo and to allow Serial to start
   delay(2000);
 
   // Serial port should be open by now
@@ -127,19 +131,20 @@ void setup(void) {
 
 void loop() {
   // Read analog inputs 
-  light_level = map(analogRead(ANLS), 0 , 4095, 0, 255);
+  light_level = map(analogRead(ANLS), 0 , 4095, 255, 0);
   raw_temp = map(analogRead(ANTS), 0, 4095, 0, 255);
-  pot_left = map(analogRead(ANPOT_L), 0, 4095, 0, 255);
-  pot_right = map(analogRead(ANPOT_R), 0, 4095, 0, 255);
+  pot_left = map(analogRead(ANPOTL), 0, 4095, 0, 255);
+  pot_right = map(analogRead(ANPOTR), 0, 4095, 0, 255);
 
   // Display values on TFT LCD as bar graph gauges
   // Clear canvas
   canvas.fillScreen(BLACK);
-  // Draw analog gauges
+  // Draw analog gauges to the canvas
   draw_gauge(0, light_level, YELLOW);
   draw_gauge(1, raw_temp, RED);
   draw_gauge(2, pot_left, GREEN);
   draw_gauge(3, pot_right, MIROBO_BLUE);
+  // Display the canvas on the LCD
   lcd.drawRGBBitmap(0, 0, canvas.getBuffer(), canvas.width(), canvas.height());
 
   // PWM LEDs using analog values
@@ -152,7 +157,7 @@ void loop() {
   delay(16);
 }
 
-// Draws the mirobo.tech logo on the canvas while leaving room for a text status line.
+// Draw the mirobo.tech logo on the canvas and set the cursor for a status line.
 void draw_miroboLogo() { 
   canvas.fillScreen(BLACK);
   canvas.fillRoundRect(0, 0, 240, 240, 20, 0xFFFF);
@@ -165,8 +170,8 @@ void draw_miroboLogo() {
 }
 
 // Draws one of four full-height bar graph + number gauges using semi-dynamic
-// scaling (for possible future modification?), but really designed for 60 px
-// width with 6 px bar graph gauge frame width.
+// scaling (for possible future modification?), but currently designed for 60 px
+// gauge width with a 6 px bar graph gauge frame width.
 //
 // Usage: draw_gauge(position[0-3], display-value[0-255], display-color[RGB-5-6-5])
 void draw_gauge(unsigned int pos, unsigned int val, unsigned int col) {
